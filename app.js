@@ -70,7 +70,8 @@
     for (const file of files) {
       const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const previewUrl = URL.createObjectURL(file);
-      state.photos.push({ id, file, previewUrl, name: file.name });
+      const takenAt = await readPhotoTakenAt(file);
+      state.photos.push({ id, file, previewUrl, name: file.name, takenAt });
       await nextFrame();
     }
 
@@ -89,7 +90,7 @@
       card.innerHTML = `
         <img src="${photo.previewUrl}" alt="Photo ${index + 1}">
         <div class="photo-meta">
-          <span>Photo ${index + 1}</span>
+          <span>Photo ${index + 1} - ${formatPhotoMetaLabel(photo.takenAt)}</span>
           <button class="remove-photo" type="button" aria-label="Supprimer la photo ${index + 1}">X</button>
         </div>
       `;
@@ -207,9 +208,10 @@
       addCoverPage(doc, data);
 
       for (let index = 0; index < state.photos.length; index += 1) {
-        const image = await compressImage(state.photos[index].file);
+        const photo = state.photos[index];
+        const image = await compressImage(photo.file);
         doc.addPage();
-        addPhotoPage(doc, image, data, index + 1, state.photos.length);
+        addPhotoPage(doc, image, data, photo, index + 1, state.photos.length);
         setProgress(Math.round(((index + 1) / state.photos.length) * 86), `Traitement photo ${index + 1} / ${state.photos.length}`);
         await nextFrame();
       }
@@ -264,26 +266,27 @@
     doc.text("RELEVE PHOTOGRAPHIQUE CONTRADICTOIRE", 105, 34, { align: "center", maxWidth: 174 });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11.5);
+    doc.setFontSize(10.5);
     const lines = [
       `Photos prises dans le cadre de la visite prealable a la signature de l'acte authentique et/ou de la remise des cles du bien situe ${data.propertyAddress}.`,
       "Le present document a pour objet de conserver une trace photographique de l'etat apparent interieur et exterieur du bien a la date indiquee.",
       `Presents lors de la visite :\n- Acheteurs : ${data.buyersName}\n- Agent immobilier : ${data.agentName}, representant l'agence ${data.agencyName}`,
+      "Déclaration des parties\nLes signataires reconnaissent que les photographies figurant dans le présent document ont été prises contradictoirement lors de la visite du bien immobilier situé au 76 rue Gérard Philipe à Amilly, avant la signature de l'acte authentique et/ou la remise des clés. Les photographies reflètent l'état apparent du bien au moment de leur réalisation. La signature du présent document atteste uniquement de leur prise en présence des signataires et ne vaut pas reconnaissance d'une responsabilité juridique sur les éventuelles anomalies constatées.",
       "Le present document constitue un releve photographique contradictoire etabli a titre de preuve de l'etat apparent du bien a la date indiquee. Il ne vaut pas constat d'huissier ni constat de commissaire de justice.",
       "Les signataires declarent que les photographies integrees au present document ont ete prises dans le cadre de la visite du bien mentionne ci-dessus, a la date et aux horaires indiques."
     ];
 
-    let y = 58;
+    let y = 54;
     lines.forEach((paragraph) => {
       const wrapped = doc.splitTextToSize(paragraph, 170);
       doc.text(wrapped, 20, y);
-      y += wrapped.length * 6 + 10;
+      y += wrapped.length * 5.2 + 7;
     });
 
-    addInfoBlock(doc, data, 20, 232);
+    addInfoBlock(doc, data, 20, 244);
   }
 
-  function addPhotoPage(doc, image, data, photoNumber, totalPhotos) {
+  function addPhotoPage(doc, image, data, photo, photoNumber, totalPhotos) {
     drawPageFrame(doc);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -295,7 +298,7 @@
     const imageX = box.x + fitted.x;
     const imageY = box.y + fitted.y;
     doc.addImage(image.dataUrl, "JPEG", imageX, imageY, fitted.width, fitted.height, undefined, "FAST");
-    addPhotoOverlay(doc, data, photoNumber, totalPhotos, imageX, imageY, fitted.width, fitted.height);
+    addPhotoOverlay(doc, photo, photoNumber, imageX, imageY, fitted.width, fitted.height);
 
     doc.setDrawColor(210, 218, 227);
     doc.rect(box.x, box.y, box.width, box.height);
@@ -304,8 +307,8 @@
     doc.text("Document signe en page finale", 105, 268, { align: "center" });
   }
 
-  function addPhotoOverlay(doc, data, photoNumber, totalPhotos, x, y, width, height) {
-    const overlayText = `${data.visitDate} - ${data.startTime || data.generationLabel} - Photo ${photoNumber} / ${totalPhotos}`;
+  function addPhotoOverlay(doc, photo, photoNumber, x, y, width, height) {
+    const overlayText = `Photo n°${photoNumber} / ${formatPhotoDate(photo.takenAt)} / ${formatPhotoTime(photo.takenAt)}`;
     const overlayHeight = 8;
     const overlayY = y + height - overlayHeight - 2;
     doc.setFillColor(255, 255, 255);
@@ -419,6 +422,114 @@
     };
   }
 
+  async function readPhotoTakenAt(file) {
+    const exifDate = await readExifDate(file);
+    if (exifDate) {
+      return exifDate;
+    }
+    if (file.lastModified) {
+      return new Date(file.lastModified);
+    }
+    return new Date();
+  }
+
+  async function readExifDate(file) {
+    if (!/jpe?g$/i.test(file.name) && file.type !== "image/jpeg") {
+      return null;
+    }
+
+    try {
+      const buffer = await file.slice(0, 256 * 1024).arrayBuffer();
+      const view = new DataView(buffer);
+      if (view.getUint16(0, false) !== 0xffd8) {
+        return null;
+      }
+
+      let offset = 2;
+      while (offset + 4 < view.byteLength) {
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        if ((marker & 0xff00) !== 0xff00) {
+          return null;
+        }
+
+        const size = view.getUint16(offset, false);
+        offset += 2;
+        if (marker === 0xffe1 && readAscii(view, offset, 6) === "Exif\0\0") {
+          return parseExifBlock(view, offset + 6, size - 8);
+        }
+        offset += size - 2;
+      }
+    } catch (error) {
+      console.warn("Lecture EXIF impossible pour cette photo.", error);
+    }
+    return null;
+  }
+
+  function parseExifBlock(view, tiffStart, length) {
+    const littleEndian = readAscii(view, tiffStart, 2) === "II";
+    const firstIfdOffset = view.getUint32(tiffStart + 4, littleEndian);
+    const ifd0 = readIfdTags(view, tiffStart, tiffStart + firstIfdOffset, littleEndian, length);
+    const exifIfdOffset = ifd0.get(0x8769);
+    let dateText = ifd0.get(0x0132);
+
+    if (exifIfdOffset) {
+      const exifTags = readIfdTags(view, tiffStart, tiffStart + exifIfdOffset, littleEndian, length);
+      dateText = exifTags.get(0x9003) || exifTags.get(0x9004) || dateText;
+    }
+
+    return parseExifDateString(dateText);
+  }
+
+  function readIfdTags(view, tiffStart, ifdOffset, littleEndian, length) {
+    const tags = new Map();
+    if (ifdOffset < tiffStart || ifdOffset + 2 > tiffStart + length) {
+      return tags;
+    }
+
+    const entryCount = view.getUint16(ifdOffset, littleEndian);
+    for (let index = 0; index < entryCount; index += 1) {
+      const entry = ifdOffset + 2 + index * 12;
+      if (entry + 12 > tiffStart + length) {
+        break;
+      }
+
+      const tag = view.getUint16(entry, littleEndian);
+      const type = view.getUint16(entry + 2, littleEndian);
+      const count = view.getUint32(entry + 4, littleEndian);
+      const valueOffset = view.getUint32(entry + 8, littleEndian);
+
+      if (type === 2) {
+        const inlineOffset = count <= 4 ? entry + 8 : tiffStart + valueOffset;
+        tags.set(tag, readAscii(view, inlineOffset, count).replace(/\0/g, "").trim());
+      } else if (type === 4) {
+        tags.set(tag, valueOffset);
+      }
+    }
+    return tags;
+  }
+
+  function parseExifDateString(value) {
+    if (!value) {
+      return null;
+    }
+    const match = value.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) {
+      return null;
+    }
+    const [, year, month, day, hour, minute, second = "00"] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+  }
+
+  function readAscii(view, offset, length) {
+    let text = "";
+    const safeLength = Math.max(0, Math.min(length, view.byteLength - offset));
+    for (let index = 0; index < safeLength; index += 1) {
+      text += String.fromCharCode(view.getUint8(offset + index));
+    }
+    return text;
+  }
+
   async function loadImage(file) {
     if ("createImageBitmap" in window) {
       try {
@@ -461,6 +572,18 @@
     }
     const [year, month, day] = value.split("-");
     return `${day}/${month}/${year}`;
+  }
+
+  function formatPhotoMetaLabel(date) {
+    return `${formatPhotoDate(date)} ${formatPhotoTime(date)}`;
+  }
+
+  function formatPhotoDate(date) {
+    return date.toLocaleDateString("fr-FR");
+  }
+
+  function formatPhotoTime(date) {
+    return `${date.getHours()}h${String(date.getMinutes()).padStart(2, "0")}`;
   }
 
   function setMessage(message, type) {

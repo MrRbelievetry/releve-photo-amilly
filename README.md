@@ -34,3 +34,4 @@ Le PDF est genere dans le navigateur. Les photos ne sont pas envoyees a un serve
 - La qualite JPEG est reglee autour de 0,58 pour limiter davantage le poids du PDF.
 - Le PDF final contient une page de garde, une page par photo et une page finale avec signatures.
 - Si l'agent immobilier ne souhaite pas signer, une case permet de le mentionner en page finale.
+- Chaque photo du PDF recoit une incrustation avec son numero, sa date et son heure. La date EXIF est utilisee quand elle est disponible, sinon la date de modification fournie par le fichier est utilisee.
