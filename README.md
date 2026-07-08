@@ -30,6 +30,7 @@ Le PDF est genere dans le navigateur. Les photos ne sont pas envoyees a un serve
 ## Notes
 
 - L'application est 100 % statique et compatible GitHub Pages.
-- Les images sont redimensionnees a 1600 px maximum sur le plus grand cote.
-- La qualite JPEG est reglee autour de 0,72 pour limiter le poids du PDF.
+- Les images sont redimensionnees a 1200 px maximum sur le plus grand cote.
+- La qualite JPEG est reglee autour de 0,58 pour limiter davantage le poids du PDF.
 - Le PDF final contient une page de garde, une page par photo et une page finale avec signatures.
+- Si l'agent immobilier ne souhaite pas signer, une case permet de le mentionner en page finale.

@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  const MAX_IMAGE_SIDE = 1600;
-  const JPEG_QUALITY = 0.72;
+  const MAX_IMAGE_SIDE = 1200;
+  const JPEG_QUALITY = 0.58;
   const OUTPUT_FILE_NAME = "releve-photographique-76-rue-gerard-philipe-amilly-21-07-2026.pdf";
 
   const state = {
@@ -25,6 +25,7 @@
     clearPhotosBtn: document.getElementById("clearPhotosBtn"),
     buyersSignature: document.getElementById("buyersSignature"),
     agentSignature: document.getElementById("agentSignature"),
+    agentRefusesSignature: document.getElementById("agentRefusesSignature"),
     clearBuyersSignature: document.getElementById("clearBuyersSignature"),
     clearAgentSignature: document.getElementById("clearAgentSignature"),
     generatePdfBtn: document.getElementById("generatePdfBtn"),
@@ -48,8 +49,15 @@
     els.clearPhotosBtn.addEventListener("click", clearPhotos);
     els.clearBuyersSignature.addEventListener("click", () => clearSignature(els.buyersSignature, "buyersSigned"));
     els.clearAgentSignature.addEventListener("click", () => clearSignature(els.agentSignature, "agentSigned"));
+    els.agentRefusesSignature.addEventListener("change", handleAgentRefusalChange);
     els.generatePdfBtn.addEventListener("click", generatePdf);
     renderPhotos();
+  }
+
+  function handleAgentRefusalChange() {
+    if (els.agentRefusesSignature.checked) {
+      clearSignature(els.agentSignature, "agentSigned");
+    }
   }
 
   async function handlePhotoSelection(event) {
@@ -115,6 +123,9 @@
 
     const start = (event) => {
       event.preventDefault();
+      if (stateKey === "agentSigned") {
+        els.agentRefusesSignature.checked = false;
+      }
       drawing = true;
       lastPoint = getCanvasPoint(canvas, event);
       context.beginPath();
@@ -224,8 +235,8 @@
     if (!state.buyersSigned) {
       return { ok: false, message: "La signature des acheteurs est obligatoire." };
     }
-    if (!state.agentSigned) {
-      return { ok: false, message: "La signature de l'agent immobilier est obligatoire." };
+    if (!state.agentSigned && !els.agentRefusesSignature.checked) {
+      return { ok: false, message: "Signez pour l'agent immobilier ou cochez que l'agent n'a pas souhaite signer." };
     }
     return { ok: true };
   }
@@ -240,6 +251,7 @@
       buyersName: els.buyersName.value.trim(),
       agentName: els.agentName.value.trim(),
       agencyName: els.agencyName.value.trim(),
+      agentRefusesSignature: els.agentRefusesSignature.checked,
       generationDate,
       generationLabel: generationDate.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })
     };
@@ -275,18 +287,33 @@
     drawPageFrame(doc);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text(`${data.propertyAddress} - ${data.visitDate} - ${data.startTime || data.generationLabel}`, 15, 14, { maxWidth: 180 });
-    doc.text(`Photo ${photoNumber} / ${totalPhotos}`, 195, 22, { align: "right" });
+    doc.text(data.propertyAddress, 15, 15, { maxWidth: 142 });
+    doc.text(`Photo ${photoNumber} / ${totalPhotos}`, 195, 15, { align: "right" });
 
     const box = { x: 15, y: 28, width: 180, height: 226 };
     const fitted = fitImage(image.width, image.height, box.width, box.height);
-    doc.addImage(image.dataUrl, "JPEG", box.x + fitted.x, box.y + fitted.y, fitted.width, fitted.height);
+    const imageX = box.x + fitted.x;
+    const imageY = box.y + fitted.y;
+    doc.addImage(image.dataUrl, "JPEG", imageX, imageY, fitted.width, fitted.height, undefined, "FAST");
+    addPhotoOverlay(doc, data, photoNumber, totalPhotos, imageX, imageY, fitted.width, fitted.height);
 
     doc.setDrawColor(210, 218, 227);
     doc.rect(box.x, box.y, box.width, box.height);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(10);
     doc.text("Document signe en page finale", 105, 268, { align: "center" });
+  }
+
+  function addPhotoOverlay(doc, data, photoNumber, totalPhotos, x, y, width, height) {
+    const overlayText = `${data.visitDate} - ${data.startTime || data.generationLabel} - Photo ${photoNumber} / ${totalPhotos}`;
+    const overlayHeight = 8;
+    const overlayY = y + height - overlayHeight - 2;
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x + 2, overlayY, width - 4, overlayHeight, "F");
+    doc.setTextColor(20, 28, 38);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(overlayText, x + 4, overlayY + 5.4, { maxWidth: width - 8 });
   }
 
   function addFinalPage(doc, data) {
@@ -303,13 +330,37 @@
       `Adresse : ${data.propertyAddress}`,
       `Acheteurs : ${data.buyersName}`,
       `Agent immobilier : ${data.agentName}, ${data.agencyName}`,
+      `Statut signature agent : ${data.agentRefusesSignature ? "n'a pas souhaite signer" : "signature recueillie"}`,
       `Date et heure de generation du PDF : ${data.generationLabel}`,
       "Document genere localement dans le navigateur. Aucune photographie n'est transmise a un serveur."
     ];
     doc.text(summary, 20, 48, { maxWidth: 170 });
 
     addSignatureImage(doc, "Signature acheteurs", data.buyersName, els.buyersSignature, 20, 108);
-    addSignatureImage(doc, "Signature agent immobilier", `${data.agentName}, ${data.agencyName}`, els.agentSignature, 20, 184);
+    if (data.agentRefusesSignature) {
+      addAgentRefusalBlock(doc, data, 20, 184);
+    } else {
+      addSignatureImage(doc, "Signature agent immobilier", `${data.agentName}, ${data.agencyName}`, els.agentSignature, 20, 184);
+    }
+  }
+
+  function addAgentRefusalBlock(doc, data, x, y) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Signature agent immobilier", x, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`${data.agentName}, ${data.agencyName}`, x, y + 6);
+    doc.setDrawColor(190, 200, 212);
+    doc.rect(x, y + 10, 170, 38);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text(
+      "L'agent immobilier present n'a pas souhaite signer le present releve photographique.",
+      x + 4,
+      y + 25,
+      { maxWidth: 162 }
+    );
   }
 
   function addSignatureImage(doc, title, subtitle, canvas, x, y) {

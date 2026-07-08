@@ -127,6 +127,29 @@ input[type="text"] {
   background: #fff;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.checkbox-row input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.checkbox-row span {
+  margin: 0;
+  font-weight: 600;
+}
+
 input:focus,
 button:focus-visible,
 .upload-zone:focus-within,
