@@ -1,0 +1,430 @@
+(function () {
+  "use strict";
+
+  const MAX_IMAGE_SIDE = 1600;
+  const JPEG_QUALITY = 0.72;
+  const OUTPUT_FILE_NAME = "releve-photographique-76-rue-gerard-philipe-amilly-21-07-2026.pdf";
+
+  const state = {
+    photos: [],
+    buyersSigned: false,
+    agentSigned: false
+  };
+
+  const els = {
+    visitDate: document.getElementById("visitDate"),
+    startTime: document.getElementById("startTime"),
+    endTime: document.getElementById("endTime"),
+    propertyAddress: document.getElementById("propertyAddress"),
+    buyersName: document.getElementById("buyersName"),
+    agentName: document.getElementById("agentName"),
+    agencyName: document.getElementById("agencyName"),
+    photoInput: document.getElementById("photoInput"),
+    photoPreview: document.getElementById("photoPreview"),
+    photoCount: document.getElementById("photoCount"),
+    clearPhotosBtn: document.getElementById("clearPhotosBtn"),
+    buyersSignature: document.getElementById("buyersSignature"),
+    agentSignature: document.getElementById("agentSignature"),
+    clearBuyersSignature: document.getElementById("clearBuyersSignature"),
+    clearAgentSignature: document.getElementById("clearAgentSignature"),
+    generatePdfBtn: document.getElementById("generatePdfBtn"),
+    messageBox: document.getElementById("messageBox"),
+    progressWrap: document.querySelector(".progress-wrap"),
+    progressBar: document.getElementById("progressBar"),
+    progressText: document.getElementById("progressText"),
+    progressPercent: document.getElementById("progressPercent")
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+  function init() {
+    setupSignaturePad(els.buyersSignature, "buyersSigned");
+    setupSignaturePad(els.agentSignature, "agentSigned");
+    els.photoInput.addEventListener("change", handlePhotoSelection);
+    els.clearPhotosBtn.addEventListener("click", clearPhotos);
+    els.clearBuyersSignature.addEventListener("click", () => clearSignature(els.buyersSignature, "buyersSigned"));
+    els.clearAgentSignature.addEventListener("click", () => clearSignature(els.agentSignature, "agentSigned"));
+    els.generatePdfBtn.addEventListener("click", generatePdf);
+    renderPhotos();
+  }
+
+  async function handlePhotoSelection(event) {
+    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) {
+      return;
+    }
+
+    setMessage("Chargement des photos en cours...", "");
+    for (const file of files) {
+      const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const previewUrl = URL.createObjectURL(file);
+      state.photos.push({ id, file, previewUrl, name: file.name });
+      await nextFrame();
+    }
+
+    els.photoInput.value = "";
+    renderPhotos();
+    setMessage(`${state.photos.length} photo(s) prete(s).`, "success");
+  }
+
+  function renderPhotos() {
+    els.photoCount.textContent = `${state.photos.length} photo${state.photos.length > 1 ? "s" : ""} chargee${state.photos.length > 1 ? "s" : ""}`;
+    els.photoPreview.innerHTML = "";
+
+    state.photos.forEach((photo, index) => {
+      const card = document.createElement("article");
+      card.className = "photo-card";
+      card.innerHTML = `
+        <img src="${photo.previewUrl}" alt="Photo ${index + 1}">
+        <div class="photo-meta">
+          <span>Photo ${index + 1}</span>
+          <button class="remove-photo" type="button" aria-label="Supprimer la photo ${index + 1}">X</button>
+        </div>
+      `;
+      card.querySelector("button").addEventListener("click", () => removePhoto(photo.id));
+      els.photoPreview.appendChild(card);
+    });
+  }
+
+  function removePhoto(id) {
+    const photo = state.photos.find((item) => item.id === id);
+    if (photo) {
+      URL.revokeObjectURL(photo.previewUrl);
+    }
+    state.photos = state.photos.filter((item) => item.id !== id);
+    renderPhotos();
+  }
+
+  function clearPhotos() {
+    state.photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+    state.photos = [];
+    renderPhotos();
+    setMessage("Toutes les photos ont ete supprimees.", "");
+  }
+
+  function setupSignaturePad(canvas, stateKey) {
+    const context = canvas.getContext("2d");
+    clearCanvas(canvas);
+
+    let drawing = false;
+    let lastPoint = null;
+
+    const start = (event) => {
+      event.preventDefault();
+      drawing = true;
+      lastPoint = getCanvasPoint(canvas, event);
+      context.beginPath();
+      context.arc(lastPoint.x, lastPoint.y, 1.8, 0, Math.PI * 2);
+      context.fillStyle = "#111827";
+      context.fill();
+      state[stateKey] = true;
+    };
+
+    const draw = (event) => {
+      if (!drawing) {
+        return;
+      }
+      event.preventDefault();
+      const point = getCanvasPoint(canvas, event);
+      context.beginPath();
+      context.moveTo(lastPoint.x, lastPoint.y);
+      context.lineTo(point.x, point.y);
+      context.strokeStyle = "#111827";
+      context.lineWidth = 3.2;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.stroke();
+      lastPoint = point;
+      state[stateKey] = true;
+    };
+
+    const stop = () => {
+      drawing = false;
+      lastPoint = null;
+    };
+
+    canvas.addEventListener("pointerdown", start);
+    canvas.addEventListener("pointermove", draw);
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointerleave", stop);
+    canvas.addEventListener("pointercancel", stop);
+  }
+
+  function clearSignature(canvas, stateKey) {
+    clearCanvas(canvas);
+    state[stateKey] = false;
+  }
+
+  function clearCanvas(canvas) {
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function getCanvasPoint(canvas, event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height
+    };
+  }
+
+  async function generatePdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      setMessage("Le module PDF n'est pas encore charge. Reessayez dans quelques secondes.", "error");
+      return;
+    }
+
+    const validation = validateBeforeGeneration();
+    if (!validation.ok) {
+      setMessage(validation.message, "error");
+      return;
+    }
+
+    els.generatePdfBtn.disabled = true;
+    setProgress(0, "Preparation du PDF");
+    setMessage("", "");
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
+      const data = collectFormData();
+      addCoverPage(doc, data);
+
+      for (let index = 0; index < state.photos.length; index += 1) {
+        const image = await compressImage(state.photos[index].file);
+        doc.addPage();
+        addPhotoPage(doc, image, data, index + 1, state.photos.length);
+        setProgress(Math.round(((index + 1) / state.photos.length) * 86), `Traitement photo ${index + 1} / ${state.photos.length}`);
+        await nextFrame();
+      }
+
+      doc.addPage();
+      addFinalPage(doc, data);
+      setProgress(96, "Finalisation");
+      doc.save(OUTPUT_FILE_NAME);
+      setProgress(100, "PDF genere");
+      setMessage("PDF genere avec succes.", "success");
+    } catch (error) {
+      console.error(error);
+      setMessage("Une erreur est survenue pendant la generation du PDF. Essayez avec moins de photos ou rechargez la page.", "error");
+    } finally {
+      els.generatePdfBtn.disabled = false;
+    }
+  }
+
+  function validateBeforeGeneration() {
+    if (!state.photos.length) {
+      return { ok: false, message: "Ajoutez au moins une photo avant de generer le PDF." };
+    }
+    if (!state.buyersSigned) {
+      return { ok: false, message: "La signature des acheteurs est obligatoire." };
+    }
+    if (!state.agentSigned) {
+      return { ok: false, message: "La signature de l'agent immobilier est obligatoire." };
+    }
+    return { ok: true };
+  }
+
+  function collectFormData() {
+    const generationDate = new Date();
+    return {
+      visitDate: formatFrenchDate(els.visitDate.value),
+      startTime: els.startTime.value || "",
+      endTime: els.endTime.value || "",
+      propertyAddress: els.propertyAddress.value.trim(),
+      buyersName: els.buyersName.value.trim(),
+      agentName: els.agentName.value.trim(),
+      agencyName: els.agencyName.value.trim(),
+      generationDate,
+      generationLabel: generationDate.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })
+    };
+  }
+
+  function addCoverPage(doc, data) {
+    drawPageFrame(doc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("RELEVE PHOTOGRAPHIQUE CONTRADICTOIRE", 105, 34, { align: "center", maxWidth: 174 });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11.5);
+    const lines = [
+      `Photos prises dans le cadre de la visite prealable a la signature de l'acte authentique et/ou de la remise des cles du bien situe ${data.propertyAddress}.`,
+      "Le present document a pour objet de conserver une trace photographique de l'etat apparent interieur et exterieur du bien a la date indiquee.",
+      `Presents lors de la visite :\n- Acheteurs : ${data.buyersName}\n- Agent immobilier : ${data.agentName}, representant l'agence ${data.agencyName}`,
+      "Le present document constitue un releve photographique contradictoire etabli a titre de preuve de l'etat apparent du bien a la date indiquee. Il ne vaut pas constat d'huissier ni constat de commissaire de justice.",
+      "Les signataires declarent que les photographies integrees au present document ont ete prises dans le cadre de la visite du bien mentionne ci-dessus, a la date et aux horaires indiques."
+    ];
+
+    let y = 58;
+    lines.forEach((paragraph) => {
+      const wrapped = doc.splitTextToSize(paragraph, 170);
+      doc.text(wrapped, 20, y);
+      y += wrapped.length * 6 + 10;
+    });
+
+    addInfoBlock(doc, data, 20, 232);
+  }
+
+  function addPhotoPage(doc, image, data, photoNumber, totalPhotos) {
+    drawPageFrame(doc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(`${data.propertyAddress} - ${data.visitDate} - ${data.startTime || data.generationLabel}`, 15, 14, { maxWidth: 180 });
+    doc.text(`Photo ${photoNumber} / ${totalPhotos}`, 195, 22, { align: "right" });
+
+    const box = { x: 15, y: 28, width: 180, height: 226 };
+    const fitted = fitImage(image.width, image.height, box.width, box.height);
+    doc.addImage(image.dataUrl, "JPEG", box.x + fitted.x, box.y + fitted.y, fitted.width, fitted.height);
+
+    doc.setDrawColor(210, 218, 227);
+    doc.rect(box.x, box.y, box.width, box.height);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text("Document signe en page finale", 105, 268, { align: "center" });
+  }
+
+  function addFinalPage(doc, data) {
+    drawPageFrame(doc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Page finale avec signatures", 20, 30);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const summary = [
+      `Date de visite : ${data.visitDate}`,
+      `Horaires : ${data.startTime || "Non indique"} - ${data.endTime || "Non indique"}`,
+      `Adresse : ${data.propertyAddress}`,
+      `Acheteurs : ${data.buyersName}`,
+      `Agent immobilier : ${data.agentName}, ${data.agencyName}`,
+      `Date et heure de generation du PDF : ${data.generationLabel}`,
+      "Document genere localement dans le navigateur. Aucune photographie n'est transmise a un serveur."
+    ];
+    doc.text(summary, 20, 48, { maxWidth: 170 });
+
+    addSignatureImage(doc, "Signature acheteurs", data.buyersName, els.buyersSignature, 20, 108);
+    addSignatureImage(doc, "Signature agent immobilier", `${data.agentName}, ${data.agencyName}`, els.agentSignature, 20, 184);
+  }
+
+  function addSignatureImage(doc, title, subtitle, canvas, x, y) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(title, x, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(subtitle, x, y + 6);
+    doc.setDrawColor(190, 200, 212);
+    doc.rect(x, y + 10, 170, 48);
+    doc.addImage(canvas.toDataURL("image/jpeg", 0.85), "JPEG", x + 2, y + 12, 166, 44);
+  }
+
+  function addInfoBlock(doc, data, x, y) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Informations", x, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text([
+      `Date : ${data.visitDate}`,
+      `Heure de debut : ${data.startTime || "Non indiquee"}`,
+      `Heure de fin : ${data.endTime || "Non indiquee"}`,
+      `Adresse : ${data.propertyAddress}`
+    ], x, y + 8);
+  }
+
+  function drawPageFrame(doc) {
+    doc.setDrawColor(222, 228, 236);
+    doc.setLineWidth(0.4);
+    doc.rect(10, 10, 190, 277);
+  }
+
+  async function compressImage(file) {
+    const bitmap = await loadImage(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: false });
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    if (bitmap.close) {
+      bitmap.close();
+    }
+
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", JPEG_QUALITY),
+      width,
+      height
+    };
+  }
+
+  async function loadImage(file) {
+    if ("createImageBitmap" in window) {
+      try {
+        return await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (error) {
+        console.warn("createImageBitmap indisponible pour cette image, fallback HTMLImageElement.", error);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error(`Impossible de charger l'image ${file.name}`));
+      };
+      img.src = url;
+    });
+  }
+
+  function fitImage(imageWidth, imageHeight, maxWidth, maxHeight) {
+    const ratio = Math.min(maxWidth / imageWidth, maxHeight / imageHeight);
+    const width = imageWidth * ratio;
+    const height = imageHeight * ratio;
+    return {
+      width,
+      height,
+      x: (maxWidth - width) / 2,
+      y: (maxHeight - height) / 2
+    };
+  }
+
+  function formatFrenchDate(value) {
+    if (!value) {
+      return "";
+    }
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  function setMessage(message, type) {
+    els.messageBox.textContent = message;
+    els.messageBox.className = `message ${type || ""}`.trim();
+  }
+
+  function setProgress(value, text) {
+    els.progressWrap.hidden = false;
+    els.progressBar.value = value;
+    els.progressText.textContent = text;
+    els.progressPercent.textContent = `${value} %`;
+  }
+
+  function nextFrame() {
+    return new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+})();

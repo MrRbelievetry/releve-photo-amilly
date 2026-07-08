@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Releve photographique contradictoire</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Etat des lieux avant signature</p>
+      <h1>Releve photographique contradictoire</h1>
+    </div>
+    <span class="privacy-pill">100 % local</span>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel form-panel" aria-labelledby="infos-title">
+      <div class="section-heading">
+        <h2 id="infos-title">Informations du document</h2>
+        <p>Ces donnees seront reprises sur la page de garde, les photos et la page finale.</p>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          <span>Date de visite</span>
+          <input id="visitDate" type="date" value="2026-07-21">
+        </label>
+        <label>
+          <span>Heure de debut</span>
+          <input id="startTime" type="time" value="09:00">
+        </label>
+        <label>
+          <span>Heure de fin</span>
+          <input id="endTime" type="time" value="10:30">
+        </label>
+        <label class="full">
+          <span>Adresse du bien</span>
+          <input id="propertyAddress" type="text" value="76 rue Gerard Philipe, 45200 Amilly">
+        </label>
+        <label>
+          <span>Nom des acheteurs</span>
+          <input id="buyersName" type="text" value="Monsieur et Madame Rebai">
+        </label>
+        <label>
+          <span>Nom de l'agent immobilier</span>
+          <input id="agentName" type="text" value="Madame Martinez">
+        </label>
+        <label class="full">
+          <span>Nom de l'agence</span>
+          <input id="agencyName" type="text" value="Immo Blain & Cochet">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel upload-panel" aria-labelledby="photos-title">
+      <div class="section-heading">
+        <h2 id="photos-title">Photos</h2>
+        <p>Selectionnez 50 a 70 photos depuis le telephone. Les images sont reduites localement avant le PDF.</p>
+      </div>
+
+      <label class="upload-zone" for="photoInput">
+        <input id="photoInput" type="file" accept="image/*" multiple>
+        <strong>Ajouter des photos</strong>
+        <span>JPG, PNG ou HEIC selon le navigateur</span>
+      </label>
+
+      <div class="photo-toolbar">
+        <span id="photoCount">0 photo chargee</span>
+        <button id="clearPhotosBtn" type="button" class="secondary">Tout supprimer</button>
+      </div>
+
+      <div id="photoPreview" class="photo-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="panel signature-panel" aria-labelledby="signatures-title">
+      <div class="section-heading">
+        <h2 id="signatures-title">Signatures</h2>
+        <p>Signez au doigt ou a la souris. Les signatures sont placees en page finale.</p>
+      </div>
+
+      <div class="signature-grid">
+        <div class="signature-box">
+          <div class="signature-head">
+            <div>
+              <h3>Signature acheteurs</h3>
+              <p>Monsieur et Madame Rebai</p>
+            </div>
+            <button id="clearBuyersSignature" type="button" class="secondary">Effacer</button>
+          </div>
+          <canvas id="buyersSignature" width="720" height="260" aria-label="Signature des acheteurs"></canvas>
+        </div>
+
+        <div class="signature-box">
+          <div class="signature-head">
+            <div>
+              <h3>Signature agent immobilier</h3>
+              <p>Madame Martinez, Immo Blain & Cochet</p>
+            </div>
+            <button id="clearAgentSignature" type="button" class="secondary">Effacer</button>
+          </div>
+          <canvas id="agentSignature" width="720" height="260" aria-label="Signature de l'agent immobilier"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel action-panel" aria-labelledby="generation-title">
+      <div class="section-heading">
+        <h2 id="generation-title">Generation du PDF</h2>
+        <p>Tout est traite dans ce navigateur. Aucune photographie n'est envoyee a un serveur.</p>
+      </div>
+
+      <div id="messageBox" class="message" role="status" aria-live="polite"></div>
+
+      <div class="progress-wrap" hidden>
+        <div class="progress-label">
+          <span id="progressText">Preparation...</span>
+          <span id="progressPercent">0 %</span>
+        </div>
+        <progress id="progressBar" max="100" value="0"></progress>
+      </div>
+
+      <button id="generatePdfBtn" type="button" class="primary">Generer le PDF</button>
+    </section>
+  </main>
+</body>
+</html>
