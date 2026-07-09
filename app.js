@@ -206,6 +206,8 @@
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
       const data = collectFormData();
       addCoverPage(doc, data);
+      doc.addPage();
+      addCompromisAnnexPage(doc);
 
       for (let index = 0; index < state.photos.length; index += 1) {
         const photo = state.photos[index];
@@ -284,6 +286,49 @@
     });
 
     addInfoBlock(doc, data, 20, 244);
+  }
+
+  function addCompromisAnnexPage(doc) {
+    drawPageFrame(doc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Annexe 1 - Extraits du compromis de vente", 20, 30, { maxWidth: 170 });
+
+    let y = 50;
+    y = addAnnexSection(doc, "Clause : État d'occupation", [
+      "Le VENDEUR déclare que les biens objets des présentes seront libres de toute location ou occupation le jour de l'entrée en jouissance. Les biens à vendre, y compris les annexes, seront totalement débarrassés de tout objet quelconque à l'exception, le cas échéant, des meubles compris dans la présente vente. Le VENDEUR déclare qu'il occupe le bien objet des présentes."
+    ], y);
+
+    y = addAnnexSection(doc, "Clause : Mise en état des biens", [
+      "Le VENDEUR s'engage, pour le jour de la réitération des présentes par acte authentique, à nettoyer les sols, murs, portes, vitrages et fenêtres, équipements sanitaires et de cuisine, à évacuer les déchets, à vider les biens et ses éventuelles annexes de tout objet.",
+      "S'il en existe, il s'engage à entretenir les extérieurs : tonte de la pelouse, taille des haies, entretien des espaces fleuris et de jardinage, désherbage des allées et terrasses, évacuation des déchets verts, etc.",
+      "À défaut, les coûts de nettoyage intérieur, extérieur, évacuation d'objet(s), entretien de jardin, pourraient être mis à sa charge."
+    ], y);
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10.5);
+    const note = doc.splitTextToSize(
+      "Les photographies figurant dans le présent document ont été réalisées afin de documenter l'état apparent du bien au regard des obligations prévues au compromis de vente reproduites ci-dessus.",
+      170
+    );
+    doc.text(note, 20, y + 4);
+  }
+
+  function addAnnexSection(doc, title, paragraphs, y) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(title, 20, y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    paragraphs.forEach((paragraph) => {
+      const lines = doc.splitTextToSize(paragraph, 170);
+      doc.text(lines, 20, y);
+      y += lines.length * 5.2 + 7;
+    });
+
+    return y + 3;
   }
 
   function addPhotoPage(doc, image, data, photo, photoNumber, totalPhotos) {
