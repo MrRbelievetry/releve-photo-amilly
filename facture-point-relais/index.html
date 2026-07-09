@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modification adresse relais facture</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel" aria-labelledby="app-title">
+        <div class="heading">
+          <p class="eyebrow">OrientalDiscount</p>
+          <h1 id="app-title">Modification adresse relais facture</h1>
+        </div>
+
+        <form id="invoice-form" class="form">
+          <label class="file-picker">
+            <span>Choisir un PDF</span>
+            <input id="pdf-input" type="file" accept="application/pdf,.pdf" required />
+          </label>
+          <p id="file-name" class="file-name">Aucun fichier sélectionné</p>
+
+          <label class="field" for="relay-address">
+            <span>Adresse du point relais</span>
+            <textarea
+              id="relay-address"
+              rows="7"
+              placeholder="Point de retrait&#10;LA POSTE DE VITROLLES LES ARCADES&#10;ARCADES DE CITEAUX CENTRE URBAIN&#10;13127 VITROLLES&#10;FRANCE METROPOLITAINE"
+              required
+            ></textarea>
+          </label>
+
+          <p class="help">
+            Copiez simplement les informations du point relais fournies par Chronopost ou Colissimo.
+          </p>
+
+          <div class="actions">
+            <button id="generate-button" class="button primary" type="submit">
+              Générer la facture
+            </button>
+            <button id="download-button" class="button secondary" type="button" disabled>
+              Télécharger le PDF
+            </button>
+          </div>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
